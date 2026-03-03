@@ -327,6 +327,41 @@
       transform: translateY(-1px);
     }
 
+    /* 清空密钥按钮样式 */
+    .btn-clear {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: var(--transition);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      width: 100%;
+      font-size: 0.875rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      margin-top: 1rem;
+    }
+
+    .btn-clear:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(255, 71, 87, 0.05);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    .light-mode .btn-clear:hover {
+      background: rgba(255, 55, 71, 0.05);
+    }
+
+    .btn-clear:active {
+      transform: translateY(-1px);
+    }
+
     /* 卡片样式 - 增强质感 */
     .main-card {
       background: var(--card);
@@ -383,6 +418,7 @@
 
     .delay-1 { animation-delay: 0.15s; }
     .delay-2 { animation-delay: 0.3s; }
+    .delay-3 { animation-delay: 0.45s; }
 
     .timer-pulse {
       animation: timerPulse 1.2s ease-in-out infinite;
@@ -505,6 +541,32 @@
       top: 30px;
     }
 
+    /* 清空提示弹层 */
+    .clear-toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-md);
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 20px var(--shadow-lg);
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0;
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .clear-toast.show {
+      opacity: 1;
+      top: 30px;
+    }
+
     /* 减少动画偏好 */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -544,6 +606,13 @@
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
     </svg>
     <span id="toastText">验证码已复制</span>
+  </div>
+  <!-- 清空提示弹层 -->
+  <div class="clear-toast" id="clearToast">
+    <svg class="w-5 h-5 text-[var(--danger)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+    </svg>
+    <span id="clearToastText">密钥已清空</span>
   </div>
   
   <!-- 主题切换按钮 -->
@@ -608,6 +677,18 @@
           </svg>
           生成验证码
         </button>
+
+        <!-- 清空密钥按钮 - 默认隐藏，生成验证码后显示 -->
+        <button 
+          id="clearSecretBtn" 
+          class="btn-clear fade-up delay-3 hidden"
+          aria-label="清空密钥"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          清空密钥
+        </button>
       </div>
 
       <div id="codeCard" class="main-card fade-up delay-2 hidden">
@@ -661,7 +742,7 @@
 
       <footer class="page-footer fade-up delay-2">
         <p>
-          验证码每 30 秒自动刷新 · 页面刷新后数据将清除
+          验证码每 30 秒自动刷新 · 页面刷新后数据将清除 · 所有计算均在本地完成
         </p>
       </footer>
     </div>
@@ -692,6 +773,9 @@
     const copyCodeText = document.getElementById('copyCodeText');
     const copyToast = document.getElementById('copyToast');
     const toastText = document.getElementById('toastText');
+    const clearToast = document.getElementById('clearToast');
+    const clearToastText = document.getElementById('clearToastText');
+    const clearSecretBtn = document.getElementById('clearSecretBtn'); // 新增清空按钮
 
     // 初始化主题
     function initTheme() {
@@ -743,6 +827,24 @@
       setTimeout(() => {
         copyToast.classList.remove('show');
       }, 2000);
+    }
+
+    // 显示清空提示
+    function showClearToast(text) {
+      clearToastText.textContent = text;
+      clearToast.classList.add('show');
+      setTimeout(() => {
+        clearToast.classList.remove('show');
+      }, 2000);
+    }
+
+    // 清空密钥（核心新增功能）
+    function clearSecret() {
+      // 仅清空输入框，不影响currentSecret和验证码
+      secretInput.value = '';
+      secretError.classList.add('hidden'); // 清空错误提示
+      showClearToast('密钥已清空');
+      // 保留当前验证码和计时器，不做任何修改
     }
 
     // Base32 decode
@@ -864,10 +966,11 @@
       
       try {
         currentCode = await generateTOTP(secret);
-        currentSecret = secret;
+        currentSecret = secret; // 保留密钥用于后续刷新验证码
         
         codeCard.classList.remove('hidden');
         secretError.classList.add('hidden');
+        clearSecretBtn.classList.remove('hidden'); // 显示清空密钥按钮
         
         codeDisplay.textContent = formatCode(currentCode);
         
@@ -879,6 +982,7 @@
         secretError.textContent = '密钥格式无效，请检查后重试';
         secretError.classList.remove('hidden');
         codeCard.classList.add('hidden');
+        clearSecretBtn.classList.add('hidden'); // 隐藏清空密钥按钮
       }
     }
 
@@ -921,6 +1025,7 @@
 
     // Event listeners
     generateBtn.addEventListener('click', startGenerating);
+    clearSecretBtn.addEventListener('click', clearSecret); // 绑定清空密钥事件
     
     secretInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
