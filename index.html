@@ -1,740 +1,547 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2FA Code Generator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --bg: #07090c;
-            --fg: #e4ebe8;
-            --muted: #6b7c75;
-            --accent: #00d992;
-            --accent-dim: #00a872;
-            --accent-glow: rgba(0, 217, 146, 0.3);
-            --card: rgba(12, 18, 22, 0.95);
-            --border: rgba(0, 217, 146, 0.2);
-            --danger: #ff6b6b;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Space Grotesk', sans-serif;
-            background: var(--bg);
-            color: var(--fg);
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        
-        .mono {
-            font-family: 'JetBrains Mono', monospace;
-        }
-        
-        /* 背景画布 */
-        .bg-canvas {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-        }
-        
-        /* 主卡片 */
-        .main-card {
-            background: var(--card);
-            backdrop-filter: blur(40px);
-            border: 1px solid var(--border);
-            border-radius: 32px;
-            box-shadow: 
-                0 4px 24px rgba(0, 0, 0, 0.4),
-                0 0 80px rgba(0, 217, 146, 0.05),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
-        }
-        
-        /* 输入框容器 */
-        .input-wrapper {
-            position: relative;
-            width: 100%;
-            overflow: hidden;
-            border-radius: 16px;
-        }
-        
-        /* 输入框 */
-        .secret-input {
-            background: rgba(0, 0, 0, 0.5);
-            border: 2px solid var(--border);
-            border-radius: 16px;
-            padding: 18px 24px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.1rem;
-            letter-spacing: 0.08em;
-            color: var(--fg);
-            width: 100%;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            /* 强制单行显示关键属性 */
-            white-space: nowrap;
-            overflow-x: auto;
-            overflow-y: hidden;
-            text-overflow: clip;
-        }
-        
-        /* 隐藏滚动条但保持可滚动 */
-        .secret-input::-webkit-scrollbar {
-            display: none;
-        }
-        .secret-input {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        
-        .secret-input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 
-                0 0 0 4px var(--accent-glow),
-                0 0 40px var(--accent-glow);
-        }
-        
-        .secret-input::placeholder {
-            color: var(--muted);
-            letter-spacing: 0.05em;
-        }
-        
-        /* 验证码显示 */
-        .code-display {
-            font-size: clamp(4rem, 15vw, 7rem);
-            letter-spacing: 0.25em;
-            font-weight: 700;
-            line-height: 1;
-        }
-        
-        .code-char {
-            display: inline-block;
-            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-        }
-        
-        .code-char.flip {
-            animation: flipChar 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        @keyframes flipChar {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            40% { transform: translateY(-20px) scale(0.8); opacity: 0.3; }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
-        }
-        
-        /* 环形进度条 */
-        .progress-ring {
-            transform: rotate(-90deg);
-        }
-        
-        .progress-track {
-            stroke: rgba(255, 255, 255, 0.06);
-        }
-        
-        .progress-bar {
-            transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
-            filter: drop-shadow(0 0 10px var(--accent));
-        }
-        
-        .progress-bar.warning {
-            stroke: var(--danger);
-            filter: drop-shadow(0 0 12px var(--danger));
-        }
-        
-        /* 按钮 */
-        .btn-copy {
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
-            color: var(--bg);
-            font-weight: 600;
-            font-size: 1.1rem;
-            padding: 18px 48px;
-            border-radius: 16px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .btn-copy::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .btn-copy:hover:not(:disabled) {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 50px var(--accent-glow);
-        }
-        
-        .btn-copy:hover:not(:disabled)::before {
-            opacity: 1;
-        }
-        
-        .btn-copy:active:not(:disabled) {
-            transform: translateY(-2px);
-        }
-        
-        .btn-copy:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        
-        /* 状态提示 */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 100px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            background: rgba(0, 217, 146, 0.1);
-            border: 1px solid var(--border);
-            color: var(--accent);
-        }
-        
-        .status-badge.error {
-            background: rgba(255, 107, 107, 0.1);
-            border-color: rgba(255, 107, 107, 0.3);
-            color: var(--danger);
-        }
-        
-        /* Toast */
-        .toast {
-            position: fixed;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--accent);
-            color: var(--bg);
-            padding: 16px 32px;
-            border-radius: 100px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            opacity: 0;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 200;
-            box-shadow: 0 10px 40px var(--accent-glow);
-        }
-        
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-        
-        /* 倒计时显示 */
-        .countdown {
-            font-variant-numeric: tabular-nums;
-        }
-        
-        /* 入场动画 */
-        .fade-in {
-            opacity: 0;
-            transform: translateY(30px);
-            animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-        
-        @keyframes fadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        
-        /* 减少动效 */
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-        
-        /* 响应式 */
-        @media (max-width: 640px) {
-            .main-card {
-                border-radius: 24px;
-            }
-            
-            .secret-input {
-                padding: 16px 18px;
-                font-size: 1rem;
-                letter-spacing: 0.05em;
-            }
-            
-            .btn-copy {
-                padding: 16px 36px;
-                font-size: 1rem;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2FA 验证码生成器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0f0d;
+      --bg-secondary: #111916;
+      --card: #151d19;
+      --border: #243028;
+      --fg: #e8f0eb;
+      --muted: #6b8076;
+      --accent: #00d47e;
+      --accent-dim: #00a862;
+      --danger: #ff4757;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    .font-mono {
+      font-family: 'Space Mono', monospace;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(0, 212, 126, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 126, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes gridMove {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(60px, 60px); }
+    }
+
+    .glow-orb {
+      position: fixed;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 212, 126, 0.12) 0%, transparent 70%);
+      filter: blur(60px);
+      pointer-events: none;
+      animation: orbFloat 8s ease-in-out infinite;
+    }
+
+    .glow-orb-1 {
+      top: -200px;
+      right: -100px;
+    }
+
+    .glow-orb-2 {
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -4s;
+    }
+
+    @keyframes orbFloat {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(-30px, 30px) scale(1.1); }
+    }
+
+    .secret-input {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      color: var(--fg);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      transition: all 0.3s ease;
+    }
+
+    .secret-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 212, 126, 0.15);
+    }
+
+    .secret-input::placeholder {
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .code-display {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(2.5rem, 8vw, 4rem);
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      background: linear-gradient(135deg, var(--fg) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      user-select: all;
+    }
+
+    .progress-ring {
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring-circle {
+      transition: stroke-dashoffset 0.5s linear;
+      stroke-linecap: round;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+      color: var(--bg);
+      font-weight: 600;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.2) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .btn-primary:hover::before {
+      opacity: 1;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 212, 126, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      border: 2px solid var(--border);
+      color: var(--fg);
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      background: rgba(0, 212, 126, 0.1);
+    }
+
+    .main-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+    }
+
+    .copy-success {
+      animation: copyPop 0.4s ease;
+    }
+
+    @keyframes copyPop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.6s ease forwards;
+    }
+
+    @keyframes fadeUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+
+    .timer-pulse {
+      animation: timerPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes timerPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--muted);
+    }
+  </style>
 </head>
 <body>
-    <!-- 背景画布 -->
-    <canvas id="bgCanvas" class="bg-canvas"></canvas>
-    
-    <!-- 主内容 -->
-    <div class="min-h-screen flex items-center justify-center p-4 sm:p-8">
-        <div class="main-card w-full max-w-lg p-8 sm:p-12 fade-in">
-            <!-- 标题 -->
-            <div class="text-center mb-10 fade-in delay-1">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5" style="background: linear-gradient(135deg, var(--accent), var(--accent-dim)); box-shadow: 0 8px 32px var(--accent-glow);">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-[var(--bg)]">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                </div>
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">2FA 验证码生成器</h1>
-                <p class="text-[var(--muted)]">输入密钥即可生成动态验证码</p>
-            </div>
-            
-            <!-- 密钥输入 -->
-            <div class="mb-10 fade-in delay-2">
-                <label class="block text-sm text-[var(--muted)] mb-3 font-medium">Base32 密钥</label>
-                <div class="input-wrapper">
-                    <input 
-                        type="text" 
-                        id="secretInput" 
-                        class="secret-input uppercase"
-                        placeholder="输入您的密钥..."
-                        maxlength="128"
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
-                </div>
-                <div id="inputStatus" class="mt-3 hidden">
-                    <span class="status-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        密钥有效
-                    </span>
-                </div>
-            </div>
-            
-            <!-- 验证码显示区 -->
-            <div id="codeSection" class="text-center fade-in delay-3">
-                <!-- 环形进度 + 验证码 -->
-                <div class="relative inline-flex items-center justify-center mb-6">
-                    <svg class="progress-ring" width="220" height="220">
-                        <circle
-                            class="progress-track"
-                            cx="110"
-                            cy="110"
-                            r="100"
-                            fill="none"
-                            stroke-width="4"
-                        />
-                        <circle
-                            id="progressBar"
-                            class="progress-bar"
-                            cx="110"
-                            cy="110"
-                            r="100"
-                            fill="none"
-                            stroke="var(--accent)"
-                            stroke-width="4"
-                            stroke-linecap="round"
-                            stroke-dasharray="628.32"
-                            stroke-dashoffset="0"
-                        />
-                    </svg>
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div id="codeDisplay" class="code-display mono text-[var(--accent)]">
-                            ------
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 倒计时 -->
-                <div class="flex items-center justify-center gap-2 text-[var(--muted)] mb-8">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    <span id="countdown" class="mono text-lg font-semibold countdown">30</span>
-                    <span class="text-sm">秒后刷新</span>
-                </div>
-                
-                <!-- 复制按钮 -->
-                <button id="copyBtn" class="btn-copy flex items-center gap-3 mx-auto" disabled>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    复制验证码
-                </button>
-            </div>
-            
-            <!-- 使用说明 -->
-            <div class="mt-10 pt-8 border-t border-[rgba(255,255,255,0.06)]">
-                <p class="text-xs text-[var(--muted)] text-center leading-relaxed">
-                    密钥由服务商在启用双因素认证时提供，通常为 16-32 位的字母数字组合。验证码每 30 秒自动刷新。
-                </p>
-            </div>
+  <div class="bg-grid"></div>
+  <div class="glow-orb glow-orb-1"></div>
+  <div class="glow-orb glow-orb-2"></div>
+
+  <main class="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
+    <div class="w-full max-w-lg">
+      
+      <header class="text-center mb-8 fade-up">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--card)] mb-4">
+          <svg class="w-4 h-4 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+          <span class="text-sm font-medium text-[var(--muted)]">两步验证工具</span>
         </div>
+        <h1 class="font-mono text-3xl sm:text-4xl font-bold tracking-tight mb-2">2FA Generator</h1>
+        <p class="text-[var(--muted)]">输入密钥即可生成动态验证码</p>
+      </header>
+
+      <div class="main-card rounded-2xl p-6 sm:p-8 fade-up delay-1">
+        
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-[var(--muted)] mb-2">密钥 (Secret Key)</label>
+          <div class="relative">
+            <input 
+              type="text" 
+              id="secretInput" 
+              class="secret-input w-full px-4 py-3 rounded-xl text-sm sm:text-base uppercase"
+              placeholder="输入 Base32 密钥..."
+              spellcheck="false"
+              autocomplete="off"
+            >
+            <button 
+              id="toggleVisibility"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--fg)] transition-colors p-1"
+              aria-label="切换密钥可见性"
+            >
+              <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </button>
+          </div>
+          <p id="secretError" class="text-[var(--danger)] text-sm mt-2 hidden">密钥格式无效，请检查后重试</p>
+        </div>
+
+        <button 
+          id="generateBtn" 
+          class="btn-primary w-full py-3 rounded-xl font-semibold text-base flex items-center justify-center gap-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          生成验证码
+        </button>
+      </div>
+
+      <div id="codeCard" class="main-card rounded-2xl p-6 sm:p-8 mt-4 hidden fade-up delay-2">
+        
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-sm font-medium text-[var(--muted)]">当前验证码</span>
+          <div class="flex items-center gap-2">
+            <span id="timerText" class="font-mono text-sm text-[var(--accent)]">30s</span>
+            <svg class="progress-ring w-8 h-8" viewBox="0 0 36 36">
+              <circle 
+                class="text-[var(--border)]" 
+                stroke="currentColor" 
+                stroke-width="3" 
+                fill="transparent" 
+                r="15" 
+                cx="18" 
+                cy="18"
+              />
+              <circle 
+                id="progressCircle"
+                class="progress-ring-circle text-[var(--accent)]" 
+                stroke="currentColor" 
+                stroke-width="3" 
+                fill="transparent" 
+                r="15" 
+                cx="18" 
+                cy="18"
+                stroke-dasharray="94.247"
+                stroke-dashoffset="0"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <div class="text-center py-4">
+          <div id="codeDisplay" class="code-display">000 000</div>
+        </div>
+
+        <button 
+          id="copyBtn" 
+          class="btn-secondary w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+        >
+          <svg id="copyIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          <span id="copyText">复制验证码</span>
+        </button>
+      </div>
+
+      <footer class="mt-8 text-center fade-up delay-2">
+        <p class="text-xs text-[var(--muted)]">
+          验证码每 30 秒自动刷新 · 页面刷新后数据将清除
+        </p>
+      </footer>
     </div>
+  </main>
+
+  <script>
+    // State
+    let currentSecret = '';
+    let currentCode = '';
+    let timerInterval = null;
+
+    // DOM Elements
+    const secretInput = document.getElementById('secretInput');
+    const toggleVisibility = document.getElementById('toggleVisibility');
+    const eyeIcon = document.getElementById('eyeIcon');
+    const generateBtn = document.getElementById('generateBtn');
+    const secretError = document.getElementById('secretError');
+    const codeCard = document.getElementById('codeCard');
+    const codeDisplay = document.getElementById('codeDisplay');
+    const timerText = document.getElementById('timerText');
+    const progressCircle = document.getElementById('progressCircle');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyIcon = document.getElementById('copyIcon');
+    const copyText = document.getElementById('copyText');
+
+    // Base32 decode
+    function base32Decode(str) {
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      const cleanStr = str.toUpperCase().replace(/[^A-Z2-7]/g, '');
+      
+      if (cleanStr.length === 0) return null;
+      
+      let bits = '';
+      for (let i = 0; i < cleanStr.length; i++) {
+        const val = alphabet.indexOf(cleanStr[i]);
+        if (val === -1) return null;
+        bits += val.toString(2).padStart(5, '0');
+      }
+      
+      const bytes = [];
+      for (let i = 0; i + 8 <= bits.length; i += 8) {
+        bytes.push(parseInt(bits.substr(i, 8), 2));
+      }
+      
+      return new Uint8Array(bytes);
+    }
+
+    // HMAC-SHA1
+    async function hmacSha1(key, message) {
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        key,
+        { name: 'HMAC', hash: 'SHA-1' },
+        false,
+        ['sign']
+      );
+      
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
+      return new Uint8Array(signature);
+    }
+
+    // Generate TOTP
+    async function generateTOTP(secret) {
+      const key = base32Decode(secret);
+      if (!key) {
+        throw new Error('Invalid secret key');
+      }
+      
+      const time = Math.floor(Date.now() / 1000 / 30);
+      const timeBuffer = new ArrayBuffer(8);
+      const timeView = new DataView(timeBuffer);
+      timeView.setUint32(4, time, false);
+      
+      const hmac = await hmacSha1(key, new Uint8Array(timeBuffer));
+      
+      const offset = hmac[hmac.length - 1] & 0x0f;
+      const code = (
+        ((hmac[offset] & 0x7f) << 24) |
+        ((hmac[offset + 1] & 0xff) << 16) |
+        ((hmac[offset + 2] & 0xff) << 8) |
+        (hmac[offset + 3] & 0xff)
+      ) % 1000000;
+      
+      return code.toString().padStart(6, '0');
+    }
+
+    // Format code with space
+    function formatCode(code) {
+      return code.substr(0, 3) + ' ' + code.substr(3);
+    }
+
+    // Update timer display
+    function updateTimer() {
+      const now = Date.now();
+      const secondsRemaining = 30 - (Math.floor(now / 1000) % 30);
+      const progress = secondsRemaining / 30;
+      
+      timerText.textContent = secondsRemaining + 's';
+      
+      const circumference = 94.247;
+      const offset = circumference * (1 - progress);
+      progressCircle.style.strokeDashoffset = offset;
+      
+      if (secondsRemaining <= 5) {
+        progressCircle.classList.add('timer-pulse');
+        progressCircle.style.stroke = 'var(--danger)';
+        timerText.style.color = 'var(--danger)';
+      } else {
+        progressCircle.classList.remove('timer-pulse');
+        progressCircle.style.stroke = 'var(--accent)';
+        timerText.style.color = 'var(--accent)';
+      }
+      
+      if (secondsRemaining === 30) {
+        refreshCode();
+      }
+    }
+
+    // Refresh code
+    async function refreshCode() {
+      if (!currentSecret) return;
+      
+      try {
+        currentCode = await generateTOTP(currentSecret);
+        codeDisplay.textContent = formatCode(currentCode);
+      } catch (error) {
+        console.error('Error refreshing code:', error);
+      }
+    }
+
+    // Start generating
+    async function startGenerating() {
+      const secret = secretInput.value.trim().toUpperCase();
+      
+      if (!secret) {
+        secretError.textContent = '请输入密钥';
+        secretError.classList.remove('hidden');
+        return;
+      }
+      
+      try {
+        currentCode = await generateTOTP(secret);
+        currentSecret = secret;
+        
+        codeCard.classList.remove('hidden');
+        secretError.classList.add('hidden');
+        
+        codeDisplay.textContent = formatCode(currentCode);
+        
+        if (timerInterval) clearInterval(timerInterval);
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+        
+      } catch (error) {
+        secretError.textContent = '密钥格式无效，请检查后重试';
+        secretError.classList.remove('hidden');
+        codeCard.classList.add('hidden');
+      }
+    }
+
+    // Copy code
+    async function copyCode() {
+      if (!currentCode) return;
+      
+      try {
+        await navigator.clipboard.writeText(currentCode);
+        
+        copyBtn.classList.add('copy-success');
+        copyText.textContent = '已复制';
+        copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>';
+        
+        setTimeout(() => {
+          copyText.textContent = '复制验证码';
+          copyIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>';
+          copyBtn.classList.remove('copy-success');
+        }, 1500);
+        
+      } catch (error) {
+        console.error('Failed to copy:', error);
+      }
+    }
+
+    // Event listeners
+    generateBtn.addEventListener('click', startGenerating);
     
-    <!-- Toast -->
-    <div id="toast" class="toast"></div>
+    secretInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        startGenerating();
+      }
+    });
     
-    <script>
-        // ============ DOM 元素 ============
-        const bgCanvas = document.getElementById('bgCanvas');
-        const ctx = bgCanvas.getContext('2d');
-        const secretInput = document.getElementById('secretInput');
-        const inputStatus = document.getElementById('inputStatus');
-        const codeDisplay = document.getElementById('codeDisplay');
-        const progressBar = document.getElementById('progressBar');
-        const countdown = document.getElementById('countdown');
-        const copyBtn = document.getElementById('copyBtn');
-        const toast = document.getElementById('toast');
-        
-        // ============ 状态变量 ============
-        let currentSecret = '';
-        let lastCode = '';
-        let updateTimer = null;
-        
-        // ============ 动态背景 ============
-        function initBackground() {
-            const resize = () => {
-                bgCanvas.width = window.innerWidth;
-                bgCanvas.height = window.innerHeight;
-            };
-            resize();
-            window.addEventListener('resize', resize);
-            
-            // 网格点阵
-            const gridSize = 40;
-            const points = [];
-            
-            for (let x = 0; x < bgCanvas.width + gridSize; x += gridSize) {
-                for (let y = 0; y < bgCanvas.height + gridSize; y += gridSize) {
-                    points.push({
-                        baseX: x,
-                        baseY: y,
-                        x: x,
-                        y: y,
-                        vx: 0,
-                        vy: 0
-                    });
-                }
-            }
-            
-            let mouseX = bgCanvas.width / 2;
-            let mouseY = bgCanvas.height / 2;
-            
-            document.addEventListener('mousemove', (e) => {
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-            });
-            
-            function animate() {
-                // 清空并绘制渐变背景
-                ctx.fillStyle = '#07090c';
-                ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-                
-                // 径向渐变跟随鼠标
-                const gradient = ctx.createRadialGradient(
-                    mouseX, mouseY, 0,
-                    mouseX, mouseY, 500
-                );
-                gradient.addColorStop(0, 'rgba(0, 217, 146, 0.04)');
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-                
-                // 更新点位置
-                points.forEach(p => {
-                    const dx = mouseX - p.baseX;
-                    const dy = mouseY - p.baseY;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (dist < 200) {
-                        const force = (200 - dist) / 200;
-                        p.vx += (dx / dist) * force * 0.5;
-                        p.vy += (dy / dist) * force * 0.5;
-                    }
-                    
-                    // 弹性回归
-                    p.vx += (p.baseX - p.x) * 0.03;
-                    p.vy += (p.baseY - p.y) * 0.03;
-                    
-                    // 阻尼
-                    p.vx *= 0.92;
-                    p.vy *= 0.92;
-                    
-                    p.x += p.vx;
-                    p.y += p.vy;
-                });
-                
-                // 绘制连线
-                ctx.strokeStyle = 'rgba(0, 217, 146, 0.08)';
-                ctx.lineWidth = 1;
-                
-                const cols = Math.ceil((bgCanvas.height + gridSize) / gridSize);
-                
-                for (let i = 0; i < points.length; i++) {
-                    const p1 = points[i];
-                    
-                    // 水平连线
-                    if ((i % cols) < (cols - 1)) {
-                        const p2 = points[i + 1];
-                        if (p2) {
-                            ctx.beginPath();
-                            ctx.moveTo(p1.x, p1.y);
-                            ctx.lineTo(p2.x, p2.y);
-                            ctx.stroke();
-                        }
-                    }
-                    
-                    // 垂直连线
-                    const nextRow = i + cols;
-                    if (nextRow < points.length) {
-                        const p2 = points[nextRow];
-                        ctx.beginPath();
-                        ctx.moveTo(p1.x, p1.y);
-                        ctx.lineTo(p2.x, p2.y);
-                        ctx.stroke();
-                    }
-                }
-                
-                // 绘制点
-                points.forEach(p => {
-                    const dx = mouseX - p.x;
-                    const dy = mouseY - p.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const opacity = dist < 150 ? 0.4 : 0.15;
-                    const size = dist < 150 ? 2.5 : 1.5;
-                    
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, Math.max(0.5, size), 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(0, 217, 146, ${opacity})`;
-                    ctx.fill();
-                });
-                
-                requestAnimationFrame(animate);
-            }
-            
-            animate();
-        }
-        
-        // ============ TOTP 算法 ============
-        function base32Decode(str) {
-            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-            str = str.toUpperCase().replace(/[^A-Z2-7]/g, '');
-            
-            if (str.length === 0) return new Uint8Array(0);
-            
-            let bits = '';
-            for (let i = 0; i < str.length; i++) {
-                const val = alphabet.indexOf(str[i]);
-                if (val === -1) continue;
-                bits += val.toString(2).padStart(5, '0');
-            }
-            
-            const byteCount = Math.floor(bits.length / 8);
-            const bytes = new Uint8Array(byteCount);
-            for (let i = 0; i < byteCount; i++) {
-                bytes[i] = parseInt(bits.substr(i * 8, 8), 2);
-            }
-            
-            return bytes;
-        }
-        
-        async function hmacSha1(key, message) {
-            const cryptoKey = await crypto.subtle.importKey(
-                'raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
-            );
-            const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
-            return new Uint8Array(signature);
-        }
-        
-        async function generateTOTP(secret) {
-            const epoch = Math.floor(Date.now() / 1000);
-            const counter = Math.floor(epoch / 30);
-            const counterBytes = new ArrayBuffer(8);
-            const counterView = new DataView(counterBytes);
-            counterView.setUint32(4, counter, false);
-            
-            const key = base32Decode(secret);
-            if (key.length === 0) throw new Error('Invalid secret key');
-            
-            const hmac = await hmacSha1(key, new Uint8Array(counterBytes));
-            
-            const offset = hmac[hmac.length - 1] & 0x0f;
-            const code = (
-                ((hmac[offset] & 0x7f) << 24) |
-                ((hmac[offset + 1] & 0xff) << 16) |
-                ((hmac[offset + 2] & 0xff) << 8) |
-                (hmac[offset + 3] & 0xff)
-            ) % 1000000;
-            
-            return code.toString().padStart(6, '0');
-        }
-        
-        function getTimeRemaining() {
-            return 30 - (Math.floor(Date.now() / 1000) % 30);
-        }
-        
-        // ============ UI 更新 ============
-        function validateSecret(secret) {
-            const cleaned = secret.toUpperCase().replace(/[^A-Z2-7]/g, '');
-            return cleaned.length >= 16 && cleaned.length % 8 === 0 || cleaned.length >= 16;
-        }
-        
-        async function updateCode() {
-            if (!currentSecret) {
-                codeDisplay.innerHTML = '<span style="color: var(--muted);">------</span>';
-                progressBar.style.strokeDashoffset = 0;
-                countdown.textContent = '30';
-                copyBtn.disabled = true;
-                inputStatus.classList.add('hidden');
-                return;
-            }
-            
-            try {
-                const newCode = await generateTOTP(currentSecret);
-                
-                if (newCode !== lastCode) {
-                    animateCodeChange(newCode);
-                    lastCode = newCode;
-                }
-                
-                copyBtn.disabled = false;
-                
-                // 显示有效状态
-                inputStatus.classList.remove('hidden');
-                inputStatus.innerHTML = `
-                    <span class="status-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        密钥有效
-                    </span>
-                `;
-                
-            } catch (e) {
-                codeDisplay.innerHTML = '<span style="color: var(--danger);">无效</span>';
-                copyBtn.disabled = true;
-                inputStatus.classList.remove('hidden');
-                inputStatus.innerHTML = `
-                    <span class="status-badge error">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                        </svg>
-                        密钥格式无效
-                    </span>
-                `;
-                console.error('TOTP生成错误:', e);
-            }
-            
-            // 更新进度条
-            const remaining = getTimeRemaining();
-            const percent = remaining / 30;
-            const circumference = 2 * Math.PI * 100;
-            const offset = circumference * (1 - percent);
-            
-            progressBar.style.strokeDashoffset = offset;
-            countdown.textContent = remaining;
-            
-            // 警告状态
-            if (remaining <= 10) {
-                progressBar.classList.add('warning');
-            } else {
-                progressBar.classList.remove('warning');
-            }
-        }
-        
-        function animateCodeChange(newCode) {
-            const chars = codeDisplay.querySelectorAll('.code-char');
-            const newChars = newCode.split('');
-            
-            if (chars.length === 0) {
-                codeDisplay.innerHTML = newChars.map(c => `<span class="code-char">${c}</span>`).join('');
-                return;
-            }
-            
-            chars.forEach((char, i) => {
-                if (char.textContent !== newChars[i]) {
-                    char.classList.add('flip');
-                    setTimeout(() => {
-                        char.textContent = newChars[i];
-                        char.classList.remove('flip');
-                    }, 200);
-                }
-            });
-        }
-        
-        // ============ 复制功能 ============
-        async function copyCode() {
-            if (!lastCode) return;
-            
-            try {
-                await navigator.clipboard.writeText(lastCode);
-                showToast('验证码已复制');
-            } catch (e) {
-                showToast('复制失败');
-                console.error('复制错误:', e);
-            }
-        }
-        
-        function showToast(message) {
-            toast.textContent = message;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
-        }
-        
-        // ============ 事件绑定 ============
-        secretInput.addEventListener('input', (e) => {
-            let value = e.target.value.toUpperCase().replace(/[^A-Z2-7]/g, '');
-            e.target.value = value;
-            
-            currentSecret = value;
-            lastCode = '';
-            
-            if (updateTimer) clearInterval(updateTimer);
-            
-            if (value.length >= 16) {
-                updateCode();
-                updateTimer = setInterval(updateCode, 1000);
-            } else {
-                updateCode();
-                inputStatus.classList.add('hidden');
-            }
-        });
-        
-        copyBtn.addEventListener('click', copyCode);
-        
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c' && lastCode && !window.getSelection().toString()) {
-                copyCode();
-            }
-        });
-        
-        // ============ 初始化 ============
-        initBackground();
-        updateCode();
-    </script>
+    copyBtn.addEventListener('click', copyCode);
+    
+    let isVisible = true;
+    toggleVisibility.addEventListener('click', () => {
+      isVisible = !isVisible;
+      secretInput.type = isVisible ? 'text' : 'password';
+      eyeIcon.innerHTML = isVisible 
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>';
+    });
+
+    secretInput.addEventListener('input', () => {
+      secretError.classList.add('hidden');
+    });
+  </script>
 </body>
 </html>
