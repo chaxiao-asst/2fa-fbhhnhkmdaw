@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2FA 验证码生成器</title>
+  <link rel="icon" href="https://cloudflare-imgbed.sooday.dpdns.org/file/图库/图标/OBlG8VXg.webp" type="image/webp">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -622,7 +623,7 @@
     </svg>
   </button>
 
-  <main class="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8">
+  <main class="relative z-10 min-h-[80vh] flex items-center justify-center p-4 sm:p-6 md:p-8">
     <div class="w-full max-w-lg">
       
       <header class="text-center mb-8 fade-up">
@@ -649,16 +650,27 @@
               spellcheck="false"
               autocomplete="off"
             >
-            <button 
-              id="toggleVisibility"
-              class="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--fg)] transition-colors p-1"
-              aria-label="切换密钥可见性"
-            >
-              <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-              </svg>
-            </button>
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <button 
+                id="copySecretBtn"
+                class="text-[var(--muted)] hover:text-[var(--accent)] transition-colors p-1"
+                aria-label="复制密钥"
+              >
+                <svg id="copySecretIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+              <button 
+                id="toggleVisibility"
+                class="text-[var(--muted)] hover:text-[var(--fg)] transition-colors p-1"
+                aria-label="切换密钥可见性"
+              >
+                <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <p id="secretError" class="error-text hidden">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -759,6 +771,8 @@
     const secretInput = document.getElementById('secretInput');
     const toggleVisibility = document.getElementById('toggleVisibility');
     const eyeIcon = document.getElementById('eyeIcon');
+    const copySecretBtn = document.getElementById('copySecretBtn');
+    const copySecretIcon = document.getElementById('copySecretIcon');
     const generateBtn = document.getElementById('generateBtn');
     const secretError = document.getElementById('secretError');
     const codeCard = document.getElementById('codeCard');
@@ -1009,6 +1023,30 @@
       }
     }
 
+    // 复制密钥 - 双方案兼容
+    async function copySecret() {
+      const secret = secretInput.value.trim();
+      if (!secret) {
+        showToast('暂无密钥可复制', false);
+        return;
+      }
+
+      try {
+        // 方案1：优先使用剪贴板API（主流浏览器）
+        await navigator.clipboard.writeText(secret);
+        copySecretSuccessHandle();
+      } catch (err) {
+        // 方案2：降级使用创建临时文本框复制（兼容低版本/无HTTPS环境）
+        const tempInput = document.createElement('input');
+        tempInput.value = secret;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        copySecretSuccessHandle();
+      }
+    }
+
     // 复制成功统一处理
     function copySuccessHandle() {
       copyBtn.classList.add('copy-success');
@@ -1023,9 +1061,22 @@
       }, 1500);
     }
 
+    // 复制密钥成功处理
+    function copySecretSuccessHandle() {
+      copySecretBtn.classList.add('copy-success');
+      copySecretIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>';
+      showToast('密钥已复制到剪贴板');
+      
+      setTimeout(() => {
+        copySecretIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>';
+        copySecretBtn.classList.remove('copy-success');
+      }, 1500);
+    }
+
     // Event listeners
     generateBtn.addEventListener('click', startGenerating);
     clearSecretBtn.addEventListener('click', clearSecret); // 绑定清空密钥事件
+    copySecretBtn.addEventListener('click', copySecret); // 绑定复制密钥事件
     
     secretInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
